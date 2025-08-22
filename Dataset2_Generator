@@ -1,0 +1,131 @@
+import pandas as pd
+import numpy as np
+import random
+from datetime import datetime
+
+# Set random seed
+np.random.seed(42)
+random.seed(42)
+
+# Number of records
+n_transactions = 100000
+
+# -----------------------------
+# Dimension Tables
+# -----------------------------
+
+# DimProducts
+brands = ["Volkswagen", "Audi", "Skoda", "Porsche", "Lamborghini"]
+car_models = {
+    "Volkswagen": ["Polo", "Taigun", "Virtus", "Passat"],
+    "Audi": ["Q5", "A4", "A6", "Q7"],
+    "Skoda": ["Octavia", "Superb", "Kushaq", "Rapid"],
+    "Porsche": ["Cayenne", "Panamera", "Macan"],
+    "Lamborghini": ["Urus", "Huracan", "Aventador"]
+}
+categories = ["Engine", "Electrical", "Body", "Consumables", "Tires"]
+units = ["Piece", "Set", "Liter"]
+
+product_list = []
+product_id = 1
+for brand in brands:
+    for model in car_models[brand]:
+        for cat in categories:
+            product_list.append([
+                product_id,
+                f"{brand} {model} {cat} Part",
+                cat,
+                brand,
+                model,
+                random.choice(units),
+                round(random.uniform(500, 50000), 2)
+            ])
+            product_id += 1
+
+dim_products = pd.DataFrame(product_list, columns=[
+    "ProductID", "ProductName", "Category", "Brand", "CarModel", "Unit", "StandardCost"
+])
+
+# DimWarehouses
+warehouses = [
+    [1, "Pune Central", "Pune", "West", "Ravi Kumar", 50000],
+    [2, "Delhi NCR Hub", "Delhi NCR", "North", "Amit Sharma", 70000],
+    [3, "Bangalore Hub", "Bangalore", "South", "Priya Singh", 60000],
+    [4, "Kolkata Hub", "Kolkata", "East", "Anil Das", 40000],
+    [5, "Mumbai Hub", "Mumbai", "West", "Sneha Iyer", 80000]
+]
+dim_warehouses = pd.DataFrame(warehouses, columns=[
+    "WarehouseID", "WarehouseName", "LocationCity", "Region", "ManagerName", "Capacity"
+])
+
+# DimSuppliers
+suppliers = [
+    [1, "Bosch Auto Parts", "Germany", "Hans Muller", "+49-123456", "hans@bosch.com"],
+    [2, "Delphi Automotive", "UK", "John Smith", "+44-789456", "john@delphi.com"],
+    [3, "Motherson Sumi", "India", "Rakesh Jain", "+91-987654321", "rakesh@motherson.com"],
+    [4, "Denso Corp", "Japan", "Takashi Ito", "+81-123456", "takashi@denso.jp"],
+    [5, "Valeo Auto", "France", "Pierre Dubois", "+33-123456", "pierre@valeo.fr"]
+]
+dim_suppliers = pd.DataFrame(suppliers, columns=[
+    "SupplierID", "SupplierName", "Country", "ContactPerson", "Phone", "Email"
+])
+
+# DimDate (2 years of dates)
+start_date = datetime(2023, 1, 1)
+end_date = datetime(2024, 12, 31)
+date_range = pd.date_range(start_date, end_date, freq="D")
+
+date_list = []
+for d in date_range:
+    date_list.append([
+        int(d.strftime("%Y%m%d")),
+        d.date(),
+        d.year,
+        f"Q{((d.month - 1) // 3) + 1}",
+        d.month,
+        d.strftime("%B"),
+        d.isocalendar()[1],
+        d.strftime("%A")
+    ])
+dim_date = pd.DataFrame(date_list, columns=[
+    "DateKey", "FullDate", "Year", "Quarter", "Month", "MonthName", "WeekOfYear", "DayName"
+])
+
+# -----------------------------
+# FactTransactions
+# -----------------------------
+transaction_ids = np.arange(1, n_transactions + 1)
+date_keys = np.random.choice(dim_date["DateKey"], n_transactions)
+product_ids = np.random.choice(dim_products["ProductID"], n_transactions)
+warehouse_ids = np.random.choice(dim_warehouses["WarehouseID"], n_transactions)
+movement_types = np.random.choice(["StockIn", "StockOut"], n_transactions, p=[0.5, 0.5])
+quantities = np.random.randint(1, 50, n_transactions)
+
+# Random price multiplier based on product cost
+product_costs = dim_products.set_index("ProductID")["StandardCost"].to_dict()
+unit_prices = [round(product_costs[pid] * random.uniform(1.1, 1.5), 2) for pid in product_ids]
+total_values = np.array(unit_prices) * quantities
+
+fact_transactions = pd.DataFrame({
+    "TransactionID": transaction_ids,
+    "DateKey": date_keys,
+    "ProductID": product_ids,
+    "WarehouseID": warehouse_ids,
+    "MovementType": movement_types,
+    "Quantity": quantities,
+    "UnitPrice": unit_prices,
+    "TotalValue": total_values
+})
+
+# -----------------------------
+# Save to Excel (Star Schema)
+# -----------------------------
+file_path = "VWGroup_StarSchema.xlsx"
+with pd.ExcelWriter(file_path, engine="openpyxl") as writer:
+    fact_transactions.to_excel(writer, sheet_name="FactTransactions", index=False)
+    dim_products.to_excel(writer, sheet_name="DimProducts", index=False)
+    dim_warehouses.to_excel(writer, sheet_name="DimWarehouses", index=False)
+    dim_suppliers.to_excel(writer, sheet_name="DimSuppliers", index=False)
+    dim_date.to_excel(writer, sheet_name="DimDate", index=False)
+
+print(f"✅ Excel file generated: {file_path}")
