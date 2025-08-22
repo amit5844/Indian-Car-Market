@@ -1,0 +1,84 @@
+import pandas as pd
+import numpy as np
+
+# Seed for reproducibility
+np.random.seed(42)
+
+# Settings for large dataset
+num_products = 50       # more products
+num_warehouses = 5
+num_days = 730          # 2 years
+transactions_per_day = 150  # ~150 transactions/day
+
+dates = pd.date_range(start="2023-01-01", periods=num_days, freq="D")
+
+# Volkswagen Group brands and models
+brands_models = {
+    "Volkswagen": ["Polo", "Virtus", "Taigun"],
+    "Skoda": ["Slavia", "Kushaq", "Octavia"],
+    "Audi": ["A4", "Q5", "Q7"],
+    "Porsche": ["Macan", "Cayenne"],
+    "Lamborghini": ["Urus"]
+}
+
+# Product categories
+categories = {
+    "Engine": ["Engine Oil", "Air Filter", "Oil Filter", "Fuel Pump"],
+    "Electrical": ["Battery", "Spark Plug", "Alternator"],
+    "Body": ["Wiper Blades", "Headlight Assembly", "Side Mirror"],
+    "Consumables": ["Brake Pad", "Clutch Plate"],
+    "Tires": ["Tire"]
+}
+
+# Generate Products table
+products = []
+product_id = 1
+for brand, models in brands_models.items():
+    for model in models:
+        for category, items in categories.items():
+            for item in items:
+                products.append([
+                    product_id,
+                    f"{brand} {model} {item}",
+                    category,
+                    brand,
+                    model
+                ])
+                product_id += 1
+
+products_df = pd.DataFrame(products, columns=["ProductID", "ProductName", "Category", "Brand", "CarModel"])
+products_df = products_df.sample(n=num_products, random_state=42).reset_index(drop=True)
+products_df["ProductID"] = range(1, len(products_df) + 1)
+
+# Warehouses
+warehouses = pd.DataFrame({
+    "WarehouseID": range(1, num_warehouses + 1),
+    "WarehouseName": [f"Warehouse_{i}" for i in range(1, num_warehouses + 1)],
+    "Location": ["Pune", "Delhi NCR", "Bangalore", "Kolkata", "Mumbai"]
+})
+
+# Generate stock transactions (~1 lakh rows)
+transactions = []
+for date in dates:
+    for _ in range(transactions_per_day):
+        product = np.random.randint(1, len(products_df) + 1)
+        warehouse = np.random.randint(1, num_warehouses + 1)
+        stock_in = np.random.poisson(10) if np.random.rand() < 0.4 else 0
+        stock_out = np.random.poisson(8) if np.random.rand() < 0.6 else 0
+        transactions.append([date, product, warehouse, stock_in, stock_out])
+
+transactions_df = pd.DataFrame(transactions, columns=["Date", "ProductID", "WarehouseID", "StockIn", "StockOut"])
+
+# Current stock calculation
+current_stock = transactions_df.groupby(["ProductID", "WarehouseID"]).agg({"StockIn": "sum", "StockOut": "sum"}).reset_index()
+current_stock["CurrentStock"] = current_stock["StockIn"] - current_stock["StockOut"]
+
+# Save to Excel
+file_path = "VWGroupStockData_1Lakh.xlsx"
+with pd.ExcelWriter(file_path, engine="openpyxl") as writer:
+    products_df.to_excel(writer, sheet_name="Products", index=False)
+    warehouses.to_excel(writer, sheet_name="Warehouses", index=False)
+    transactions_df.to_excel(writer, sheet_name="Transactions", index=False)
+    current_stock.to_excel(writer, sheet_name="CurrentStock", index=False)
+
+print(f"Dataset generated: {file_path}, Rows: {len(transactions_df)}")
